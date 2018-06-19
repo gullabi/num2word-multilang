@@ -13,15 +13,19 @@ class Normalizer(object):
             self.outfile = filename[:-4]+'_norm.txt'
         else:
             self.outfile = outname
+        self.logfile = 'num2word.log'
         self.p = inflect.engine()
         self.translation_dict = {}
 
     def process(self):
-        with open(self.outfile,'w') as out:
+        with open(self.outfile,'w') as out,\
+             open(self.logfile,'w') as log:
             for line in open(self.filename,'r').readlines():
                 new_line = self.normalize_translate(line)
-                out.write(line)
                 out.write(new_line)
+                if new_line != line:
+                    log.write(line)
+                    log.write(new_line)
 
     def normalize_translate(self,text):
         d_text = self.digit_normalize(text)
