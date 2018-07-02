@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import inflect
+import yaml
 
 class Normalizer(object):
     def __init__(self,filename,outname=None,language='ca'):
@@ -66,6 +67,10 @@ class Normalizer(object):
         trans = os.popen('echo %s | apertium en-ca'%word_en).read().strip()
         return re.sub(',','',trans).lower()
 
+    def write_out_dict(self):
+        with open('translation_dict.yaml','w') as out:
+            yaml.dump(self.translation_dict,out)
+
 def main():
     if len(sys.argv) < 2:
         print('Arguments missing.\n'\
@@ -82,6 +87,7 @@ def main():
 
     norm = Normalizer(filename,outname,'ca')
     norm.process()
+    norm.write_out_dict()
 
 if __name__ == "__main__":
     main()
