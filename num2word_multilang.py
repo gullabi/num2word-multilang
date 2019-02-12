@@ -5,7 +5,7 @@ import inflect
 import yaml
 
 class Normalizer(object):
-    def __init__(self,filename,outname=None,language='ca'):
+    def __init__(self,filename,outname=None,language='ca',step_cache=False):
         if not os.path.isfile(filename):
             raise IOError("%s not found"%filename)
         self.filename = filename
@@ -14,15 +14,46 @@ class Normalizer(object):
             self.outfile = filename[:-4]+'_norm.txt'
         else:
             self.outfile = outname
+        self.step_cache = step_cache
         self.logfile = 'num2word.log'
         self.p = inflect.engine()
-        self.translation_dict = {}
+        self.transdict_fname = 'translation_dict.yaml'
+
+        #self.digits = re.compile('((?<=\s)|^)\d+(?=(\s|,|\.)|$)')
+        self.digits = re.compile('(?<!\w)\d+(?!\w)')
+
+        #self.digits = re.compile('\d+')
+        self.number_digits = re.compile('(?<=\d)\.(?=\d)')
+        self.number_commas = re.compile('(?<=\d),(?=\d)')
+        self.number_space = re.compile('(?<=\d) (?=\d)')
+
+        self.commas = re.compile(',')
+
+        if os.path.isfile(self.transdict_fname):
+            print('loading translations from cache...')
+            self.translation_dict = yaml.load(open(self.transdict_fname))
+        else:
+            print('no cache found.')
+            self.translation_dict = {}
 
     def process(self):
         with open(self.outfile,'w') as out,\
              open(self.logfile,'w') as log:
+            count = 0
             for line in open(self.filename,'r').readlines():
-                new_line = self.normalize_translate(line)
+                count += 1
+                if self.step_cache:
+                    if count%150000 == 0:
+                        print(count)
+                        self.write_out_dict()
+                try:
+                    new_line = self.normalize_translate(line)
+                except Exception as e:
+                    print(e)
+                    print(line)
+                    self.write_out_dict()
+                    #sys.exit()
+                    new_line = line
                 out.write(new_line)
                 if new_line != line:
                     log.write(line)
@@ -32,13 +63,14 @@ class Normalizer(object):
         d_text = self.digit_normalize(text)
         normalized=False
         starts_with_number=False
-        for number in re.findall('\d+',d_text):
+        for number in self.digits.findall(d_text):
             if d_text.find(number) == 0:
                 starts_with_number = True
             normalized_num = self.transcribe_translate(number)
             # replace only the first occurence, since the number
             # could be a part of a larger digit further in the string
-            d_text = d_text.replace(number,normalized_num,1)
+            #d_text = d_text.replace(number,normalized_num,1)
+            d_text = re.sub('((?<=\s)|^){0}(?=(\s|,|\.))'.format(number),normalized_num,d_text)
             normalized=True
         if normalized:
             if starts_with_number:
@@ -48,10 +80,9 @@ class Normalizer(object):
         return d_text
 
     def digit_normalize(self,text):
-        number_digits = '(?<=\d)\.(?=\d)'
-        number_commas = '(?<=\d),(?=\d)'
-        d_text = re.sub(number_digits,'',text)
-        d_text = re.sub(number_commas,' coma ',d_text)
+        d_text = self.number_digits.sub('',text)
+        d_text = self.number_space.sub('',d_text)
+        d_text = self.number_commas.sub(' coma ',d_text)
         return d_text
 
     def transcribe_translate(self,number):
@@ -65,10 +96,10 @@ class Normalizer(object):
 
     def translate(self,word_en):
         trans = os.popen('echo %s | apertium en-ca'%word_en).read().strip()
-        return re.sub(',','',trans).lower()
+        return self.commas.sub('',trans).lower()
 
     def write_out_dict(self):
-        with open('translation_dict.yaml','w') as out:
+        with open(self.transdict_fname,'w') as out:
             yaml.dump(self.translation_dict,out)
 
 def main():
