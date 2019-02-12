@@ -3,6 +3,7 @@ import os
 import re
 import inflect
 import yaml
+import json
 
 class Normalizer(object):
     def __init__(self,filename,outname=None,language='ca',step_cache=False):
@@ -102,6 +103,32 @@ class Normalizer(object):
         with open(self.transdict_fname,'w') as out:
             yaml.dump(self.translation_dict,out)
 
+    def process_parlament_json(self):
+        '''
+        for processing the results of the parlament-scrape in json format
+        '''
+        sessions = json.load(open(self.filename))
+        count = 0
+        for ple_code, session in sessions.items():
+            for yaml, intervention in session.items():
+                for text_inter in intervention['text']:
+                    count += 1
+                    if self.step_cache:
+                        if count%10000 == 0:
+                            print(count)
+                            self.write_out_dict()
+                    try:
+                        new_text = self.normalize_translate(text_inter[1])
+                    except Exception as e:
+                        print(e)
+                        print(line)
+                        self.write_out_dict()
+                        #sys.exit()
+                        new_text = text
+                    text_inter[1] = new_text
+        with open(self.outfile,'w') as out:
+            json.dump(sessions, out, indent=4)
+
 def main():
     if len(sys.argv) < 2:
         print('Arguments missing.\n'\
@@ -110,6 +137,7 @@ def main():
         sys.exit()
     if len(sys.argv) > 2:
         outname = sys.argv[2]
+        parlament = False
     else:
         outname = None
     filename = sys.argv[1]
@@ -117,7 +145,10 @@ def main():
         raise IOError("%s not found"%filename)
 
     norm = Normalizer(filename,outname,'ca')
-    norm.process()
+    if parlament:
+       norm.process_parlament_json()
+    else:
+        norm.process()
     norm.write_out_dict()
 
 if __name__ == "__main__":
