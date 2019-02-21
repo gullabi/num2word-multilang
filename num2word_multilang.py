@@ -27,6 +27,8 @@ class Normalizer(object):
         self.number_digits = re.compile('(?<=\d)\.(?=\d)')
         self.number_commas = re.compile('(?<=\d),(?=\d)')
         self.number_space = re.compile('(?<=\d) (?=\d)')
+        self.trailing_dash = re.compile('((?<=\d)– )|( –(?=\d))')
+        self.number_dash = re.compile('(?<=\d)(-|–)(?=\d)')
 
         self.commas = re.compile(',')
 
@@ -84,6 +86,8 @@ class Normalizer(object):
         d_text = self.number_digits.sub('',text)
         d_text = self.number_space.sub('',d_text)
         d_text = self.number_commas.sub(' coma ',d_text)
+        d_text = self.trailing_dash.sub(' ',d_text)
+        d_text = self.number_dash.sub(' ',d_text)
         return d_text
 
     def transcribe_translate(self,number):
@@ -107,27 +111,27 @@ class Normalizer(object):
         '''
         for processing the results of the parlament-scrape in json format
         '''
-        sessions = json.load(open(self.filename))
+        interventions = json.load(open(self.filename))
         count = 0
-        for ple_code, session in sessions.items():
-            for yaml, intervention in session.items():
-                for text_inter in intervention['text']:
-                    count += 1
-                    if self.step_cache:
-                        if count%10000 == 0:
-                            print(count)
-                            self.write_out_dict()
-                    try:
-                        new_text = self.normalize_translate(text_inter[1])
-                    except Exception as e:
-                        print(e)
-                        print(line)
+        for int_code, intervention in interventions.items():
+            for text_inter in intervention['text']:
+                count += 1
+                if self.step_cache:
+                    if count%1000 == 0:
+                        print(count)
                         self.write_out_dict()
-                        #sys.exit()
-                        new_text = text
-                    text_inter[1] = new_text
+                try:
+                    new_text = self.normalize_translate(text_inter[1])
+                except Exception as e:
+                    print(e)
+                    print(line)
+                    self.write_out_dict()
+                    #sys.exit()
+                    new_text = text
+                text_inter[1] = new_text
+
         with open(self.outfile,'w') as out:
-            json.dump(sessions, out, indent=4)
+            json.dump(interventions, out, indent=4)
 
 def main():
     if len(sys.argv) < 2:
