@@ -4,6 +4,7 @@ import re
 import inflect
 import yaml
 import json
+import argparse
 
 class Normalizer(object):
     def __init__(self,filename,outname=None,language='ca',step_cache=False):
@@ -20,13 +21,13 @@ class Normalizer(object):
         self.p = inflect.engine()
         self.transdict_fname = 'translation_dict.yaml'
 
-        #self.digits = re.compile('((?<=\s)|^)\d+(?=(\s|,|\.)|$)')
+        self.sphinx_struct = re.compile('^(.+)( \(.+\)$)')
         self.digits = re.compile('(?<!\w)\d+(?!\w)')
 
-        #self.digits = re.compile('\d+')
         self.number_digits = re.compile('(?<=\d)\.(?=\d)')
         self.number_commas = re.compile('(?<=\d),(?=\d)')
         self.number_space = re.compile('(?<=\d) (?=\d)')
+        self.number_slash = re.compile('(?<=\d)/(?=\d)')
         self.trailing_dash = re.compile('((?<=\d)– )|( –(?=\d))')
         self.number_dash = re.compile('(?<=\d)(-|–)(?=\d)')
 
@@ -39,7 +40,7 @@ class Normalizer(object):
             print('no cache found.')
             self.translation_dict = {}
 
-    def process(self):
+    def process(self, sphinx=False):
         with open(self.outfile,'w') as out,\
              open(self.logfile,'w') as log:
             count = 0
@@ -49,16 +50,26 @@ class Normalizer(object):
                     if count%150000 == 0:
                         print(count)
                         self.write_out_dict()
+                if sphinx:
+                    match = self.sphinx_struct.search(line)
+                    if not match:
+                        pline, f_id = line, ''
+                    else:
+                        pline, f_id = match.groups()
+                else:
+                    pline = line
                 try:
-                    new_line = self.normalize_translate(line)
+                    new_line = self.normalize_translate(pline)
                 except Exception as e:
                     print(e)
                     print(line)
                     self.write_out_dict()
                     #sys.exit()
                     new_line = line
+                if sphinx:
+                    new_line = new_line + f_id + '\n'
                 out.write(new_line)
-                if new_line != line:
+                if new_line.strip() != pline.strip():
                     log.write(line)
                     log.write(new_line)
 
@@ -87,6 +98,7 @@ class Normalizer(object):
         d_text = self.number_space.sub('',d_text)
         d_text = self.number_commas.sub(' coma ',d_text)
         d_text = self.trailing_dash.sub(' ',d_text)
+        d_text = self.number_slash.sub(' ',d_text)
         d_text = self.number_dash.sub(' ',d_text)
         return d_text
 
@@ -134,23 +146,35 @@ class Normalizer(object):
             json.dump(interventions, out, indent=4)
 
 def main():
-    if len(sys.argv) < 2:
-        print('Arguments missing.\n'\
-              'Usage: %s <in-file> <out-file> <lang>'%__file__)
-        print('Currently lang defaults to catalan.')
-        sys.exit()
-    if len(sys.argv) > 2:
-        outname = sys.argv[2]
-        parlament = False
-    else:
-        outname = None
-    filename = sys.argv[1]
-    if not os.path.isfile(filename):
+    usage = 'usage: %(prog)s -i -o [options]'
+    parser = argparse.ArgumentParser(description='number normalizer',\
+                                     usage=usage)
+    processes = ['text', 'parlament', 'sphinx']
+    parser.add_argument("-i","--in", dest="filename", default=None,\
+                        help="input file", type=str)
+    parser.add_argument("-o", "--out", dest="outname", default=None,\
+                        help="output file", type=str)
+    parser.add_argument("-p", "--process", dest="process", default="text",\
+                        help="specific process for input file, could be %s"\
+                        %str(processes))
+    args = parser.parse_args()
+
+    if not args.filename or not args.outname:
+        parser.print_usage()
+        raise ValueError('Input or output path is missing')
+
+    if args.process not in processes:
+        msg = 'process needs to be %s'%str(processes)
+        raise ValueError(msg)
+
+    if not os.path.isfile(args.filename):
         raise IOError("%s not found"%filename)
 
-    norm = Normalizer(filename,outname,'ca')
-    if parlament:
-       norm.process_parlament_json()
+    norm = Normalizer(args.filename, args.outname,'ca')
+    if args.process == 'parlament':
+        norm.process_parlament_json()
+    elif args.process == 'sphinx':
+        norm.process(sphinx=True)
     else:
         norm.process()
     norm.write_out_dict()
