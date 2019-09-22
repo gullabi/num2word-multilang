@@ -22,7 +22,8 @@ class Normalizer(object):
         self.transdict_fname = 'translation_dict.yaml'
 
         self.sphinx_struct = re.compile('^(.+)( \(.+\)$)')
-        self.digits = re.compile('(?<!\w)\d+(?!\w)')
+        #self.digits = re.compile('(?<!\w)\d+(?!\w)')
+        self.digits = re.compile('\d+(?!\w)')
 
         self.number_digits = re.compile('(?<=\d)\.(?=\d)')
         self.number_commas = re.compile('(?<=\d),(?=\d)')
@@ -60,6 +61,7 @@ class Normalizer(object):
                     pline = line
                 try:
                     new_line = self.normalize_translate(pline)
+                    new_line = self.normalize_translate(new_line, inword=True)
                 except Exception as e:
                     print(e)
                     print(line)
@@ -73,7 +75,7 @@ class Normalizer(object):
                     log.write(line)
                     log.write(new_line)
 
-    def normalize_translate(self,text):
+    def normalize_translate(self,text, inword=False):
         d_text = self.digit_normalize(text)
         normalized=False
         starts_with_number=False
@@ -81,10 +83,15 @@ class Normalizer(object):
             if d_text.find(number) == 0:
                 starts_with_number = True
             normalized_num = self.transcribe_translate(number)
-            # replace only the first occurence, since the number
-            # could be a part of a larger digit further in the string
-            #d_text = d_text.replace(number,normalized_num,1)
-            d_text = re.sub('((?<=\s)|^){0}(?=(\s|,|\.))'.format(number),normalized_num,d_text)
+            if not inword:
+                # replace only the first occurence, since the number
+                # could be a part of a larger digit further in the string
+                #d_text = d_text.replace(number,normalized_num,1)
+                d_text = re.sub('((?<=(\s|\'))|^){0}(?=(\s|,|\.))'.format(number),normalized_num,d_text)
+            else:
+                # if number comes after a word or dash replace it with space
+                # plus the written form
+                d_text = re.sub('(?<=\w)(-|){0}(?=(\s|,|\.))'.format(number),' '+normalized_num,d_text)
             normalized=True
         if normalized:
             if starts_with_number:
@@ -113,6 +120,7 @@ class Normalizer(object):
 
     def translate(self,word_en):
         trans = os.popen('echo %s | apertium en-ca'%word_en).read().strip()
+        trans = trans.replace("-un", "-u")
         return self.commas.sub('',trans).lower()
 
     def write_out_dict(self):
@@ -145,11 +153,44 @@ class Normalizer(object):
         with open(self.outfile,'w') as out:
             json.dump(interventions, out, indent=4)
 
+    def process_parlament_mongo(self):
+        '''
+        for processing the results of the parlament-scrape in json format
+        '''
+        new_lines = []
+        for line in open(self.filename).readlines():
+            intervention = json.loads(line.strip())
+            count = 0
+            for text_inter in intervention['value']['text']:
+                count += 1
+                if self.step_cache:
+                    if count%1000 == 0:
+                        print(count)
+                        self.write_out_dict()
+                try:
+                    new_text = self.normalize_translate(text_inter[1])
+                except Exception as e:
+                    print(e)
+                    print(line)
+                    self.write_out_dict()
+                    #sys.exit()
+                    new_text = text
+                text_inter[1] = new_text
+            new_lines.append(intervention)
+
+        with open(self.outfile,'w') as out:
+            #json.dump(new_lines, out)
+            pass
+
+        with open(self.outfile,'w') as out:
+            for line in new_lines:
+                out.write('%s\n'%json.dumps(line))
+
 def main():
     usage = 'usage: %(prog)s -i -o [options]'
     parser = argparse.ArgumentParser(description='number normalizer',\
                                      usage=usage)
-    processes = ['text', 'parlament', 'sphinx']
+    processes = ['text', 'parlament', 'sphinx', 'mongo']
     parser.add_argument("-i","--in", dest="filename", default=None,\
                         help="input file", type=str)
     parser.add_argument("-o", "--out", dest="outname", default=None,\
@@ -173,6 +214,8 @@ def main():
     norm = Normalizer(args.filename, args.outname,'ca')
     if args.process == 'parlament':
         norm.process_parlament_json()
+    elif args.process == 'mongo':
+        norm.process_parlament_mongo()
     elif args.process == 'sphinx':
         norm.process(sphinx=True)
     else:
