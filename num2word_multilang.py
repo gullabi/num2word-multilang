@@ -6,8 +6,11 @@ import yaml
 import json
 import argparse
 
+from es2lad import es2lad
+
 class Normalizer(object):
-    def __init__(self,filename,outname=None,language='ca',step_cache=False):
+    def __init__(self, filename, outname=None,
+                 language='cat', step_cache=False):
         if not os.path.isfile(filename):
             raise IOError("%s not found"%filename)
         self.filename = filename
@@ -19,7 +22,7 @@ class Normalizer(object):
         self.step_cache = step_cache
         self.logfile = 'num2word.log'
         self.p = inflect.engine()
-        self.transdict_fname = 'translation_dict.yaml'
+        self.transdict_fname = 'translation_dict_%s.yaml'%(language)
 
         self.sphinx_struct = re.compile('^(.+)( \(.+\)$)')
         #self.digits = re.compile('(?<!\w)\d+(?!\w)')
@@ -102,7 +105,7 @@ class Normalizer(object):
 
     def digit_normalize(self,text):
         d_text = self.number_digits.sub('',text)
-        d_text = self.number_space.sub('',d_text)
+        #d_text = self.number_space.sub('',d_text)
         d_text = self.number_commas.sub(' coma ',d_text)
         d_text = self.trailing_dash.sub(' ',d_text)
         d_text = self.number_slash.sub(' ',d_text)
@@ -119,9 +122,31 @@ class Normalizer(object):
         return word_target_lang
 
     def translate(self,word_en):
-        trans = os.popen('echo %s | apertium en-ca'%word_en).read().strip()
-        trans = trans.replace("-un", "-u")
-        return self.commas.sub('',trans).lower()
+        if self.language == 'lad':
+            language = 'es'
+        else:
+            language = self.language
+        trans = os.popen('echo %s | apertium en-%s'%(word_en,
+                                                     language)).read().strip()
+        if language in ['ca', 'cat']:
+            trans = trans.replace("-un", "-u")
+        trans = self.commas.sub('',trans).lower()
+        if self.language == 'lad':
+            trans_lad = es2lad.get(trans)
+            if not trans_lad:
+                # this fails if 30s appear in another value
+                # will translate as trenta i smt as opposed to trentismt
+                print("%s not in translation dictionary,"\
+                      " manually translating"%trans)
+                tokens = []
+                for token in trans.split():
+                    tokens.append(es2lad[token])
+                trans_lad = ' '.join(tokens)
+                # correcting 30s manually
+                trans_lad.replace('trenta i ', 'trenti')
+                print(trans_lad)
+            trans = trans_lad
+        return trans.lower()
 
     def write_out_dict(self):
         with open(self.transdict_fname,'w') as out:
@@ -198,6 +223,8 @@ def main():
     parser.add_argument("-p", "--process", dest="process", default="text",\
                         help="specific process for input file, could be %s"\
                         %str(processes))
+    parser.add_argument("-l", "--language", dest="lang", default="ca",\
+                        help="source language")
     args = parser.parse_args()
 
     if not args.filename or not args.outname:
@@ -211,7 +238,7 @@ def main():
     if not os.path.isfile(args.filename):
         raise IOError("%s not found"%filename)
 
-    norm = Normalizer(args.filename, args.outname,'ca')
+    norm = Normalizer(args.filename, args.outname,args.lang)
     if args.process == 'parlament':
         norm.process_parlament_json()
     elif args.process == 'mongo':
