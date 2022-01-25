@@ -1,5 +1,6 @@
 es2lad = {
     "cero": "sero",
+    "un": "un",
     "uno" : "uno",
     "dos" : "dos",
     "tres" : "tres ",
@@ -78,5 +79,6 @@ es2lad = {
     "ochocientos" : "ochosientos",
     "novecientos" : "novesientos",
     "mil" : "mil",
+    "millar": "mil",
     "y": "i"
 }

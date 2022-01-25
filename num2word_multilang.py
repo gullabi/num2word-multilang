@@ -70,7 +70,7 @@ class Normalizer(object):
                     print(e)
                     print(line)
                     self.write_out_dict()
-                    #sys.exit()
+                    raise ValueError()
                     new_line = line
                 if sphinx:
                     new_line = new_line + f_id + '\n'
@@ -95,7 +95,7 @@ class Normalizer(object):
             else:
                 # if number comes after a word or dash replace it with space
                 # plus the written form
-                d_text = re.sub('(?<=\w)(-|){0}(?=(\s|,|\.|)))'.format(number),' '+normalized_num,d_text)
+                d_text = re.sub('(?<=\w)(-|){0}(?=(\s|,|\.|\)))'.format(number),' '+normalized_num,d_text)
             normalized=True
         if normalized:
             if starts_with_number:
@@ -240,9 +240,9 @@ def main():
         raise ValueError(msg)
 
     if not os.path.isfile(args.filename):
-        raise IOError("%s not found"%filename)
+        raise IOError("%s not found"%args.filename)
 
-    norm = Normalizer(args.filename, args.outname,args.lang)
+    norm = Normalizer(args.filename, args.outname, args.lang)
     if args.process == 'parlament':
         norm.process_parlament_json()
     elif args.process == 'mongo':
