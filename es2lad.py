@@ -1,4 +1,5 @@
 es2lad = {
+    "cero": "sero",
     "uno" : "uno",
     "dos" : "dos",
     "tres" : "tres ",

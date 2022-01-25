@@ -79,10 +79,10 @@ class Normalizer(object):
                     log.write(line)
                     log.write(new_line)
 
-    def normalize_translate(self,text, inword=False):
-        d_text = self.digit_normalize(text)
-        normalized=False
-        starts_with_number=False
+    def normalize_translate(self, text, inword=False):
+        d_text = self.digit_normalize(text, self.language)
+        normalized = False
+        starts_with_number = False
         for number in self.digits.findall(d_text):
             if d_text.find(number) == 0:
                 starts_with_number = True
@@ -91,11 +91,11 @@ class Normalizer(object):
                 # replace only the first occurence, since the number
                 # could be a part of a larger digit further in the string
                 #d_text = d_text.replace(number,normalized_num,1)
-                d_text = re.sub('((?<=(\s|\'))|^){0}(?=([\s,.!?:;]))'.format(number),normalized_num,d_text)
+                d_text = re.sub('((?<=(\s|\'|\())|^){0}(?=([\s,.!?:;])))'.format(number),normalized_num,d_text)
             else:
                 # if number comes after a word or dash replace it with space
                 # plus the written form
-                d_text = re.sub('(?<=\w)(-|){0}(?=(\s|,|\.))'.format(number),' '+normalized_num,d_text)
+                d_text = re.sub('(?<=\w)(-|){0}(?=(\s|,|\.|)))'.format(number),' '+normalized_num,d_text)
             normalized=True
         if normalized:
             if starts_with_number:
@@ -104,16 +104,19 @@ class Normalizer(object):
                 d_text=d_text[0].upper()+d_text[1:]
         return d_text
 
-    def digit_normalize(self,text):
+    def digit_normalize(self, text, lang='ca'):
         d_text = self.number_digits.sub('',text)
         #d_text = self.number_space.sub('',d_text)
-        d_text = self.number_commas.sub(' coma ',d_text)
+        if lang in ['ca', 'cat']:
+            d_text = self.number_commas.sub(' coma ',d_text)
+        else:
+            d_text = self.number_commas.sub('',d_text)
         d_text = self.trailing_dash.sub(' ',d_text)
         d_text = self.number_slash.sub(' ',d_text)
         d_text = self.number_dash.sub(' ',d_text)
         return d_text
 
-    def transcribe_translate(self,number):
+    def transcribe_translate(self, number):
         word_en = self.p.number_to_words(number,andword='')
         if self.translation_dict.get(word_en):
             word_target_lang = self.translation_dict.get(word_en)
