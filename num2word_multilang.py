@@ -91,7 +91,7 @@ class Normalizer(object):
                 # replace only the first occurence, since the number
                 # could be a part of a larger digit further in the string
                 #d_text = d_text.replace(number,normalized_num,1)
-                d_text = re.sub('((?<=(\s|\'|\())|^){0}(?=([\s,.!?:;])))'.format(number),normalized_num,d_text)
+                d_text = re.sub('((?<=(\s|\'|\())|^){0}(?=([\s,.!?:;]))'.format(number),normalized_num,d_text)
             else:
                 # if number comes after a word or dash replace it with space
                 # plus the written form
